@@ -11,6 +11,7 @@ import org.json.JSONObject;
 
 import com.hubspot.mobilesdk.HubspotManager;
 import com.hubspot.mobilesdk.HubspotWebActivity;
+import com.hubspot.mobilesdk.config.HubspotConfigError;
 
 import java.util.HashMap;
 import java.util.Iterator;
@@ -35,6 +36,8 @@ public class HubspotChatPlugin extends CordovaPlugin {
             manager.configure();
             isConfigured = true;
             Log.d(TAG, "HubSpot SDK configured successfully");
+        } catch (HubspotConfigError e) {
+            Log.e(TAG, "HubSpot config error: " + e.getMessage());
         } catch (Exception e) {
             Log.e(TAG, "Failed to configure HubSpot SDK: " + e.getMessage());
         }
