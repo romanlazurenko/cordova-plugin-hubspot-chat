@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<plugin xmlns="http://apache.org/cordova/ns/plugins/1.0"
+        xmlns:android="http://schemas.android.com/apk/res/android"
+        id="cordova-plugin-hubspot-chat"
+        version="1.0.0">
+
+    <name>HubSpot Chat</name>
+    <description>Cordova plugin for HubSpot Mobile Chat SDK</description>
+    <license>MIT</license>
+    <keywords>cordova,hubspot,chat,support</keywords>
+
+    <js-module src="www/HubspotChat.js" name="HubspotChat">
+        <clobbers target="HubspotChat" />
+    </js-module>
+
+    <preference name="HUBSPOT_PORTAL_ID" />
+    <preference name="HUBSPOT_HUB_ID" />
+    <preference name="HUBSPOT_DEFAULT_CHAT_FLOW" default="support" />
+
+    <!-- iOS -->
+    <platform name="ios">
+        <config-file target="config.xml" parent="/*">
+            <feature name="HubspotChat">
+                <param name="ios-package" value="HubspotChatPlugin" />
+            </feature>
+        </config-file>
+
+        <source-file src="src/ios/HubspotChatPlugin.swift" />
+
+        <!-- HubSpot-Info.plist configuration -->
+        <config-file target="*-Info.plist" parent="HubSpotPortalId">
+            <string>$HUBSPOT_PORTAL_ID</string>
+        </config-file>
+        <config-file target="*-Info.plist" parent="HubSpotHubId">
+            <string>$HUBSPOT_HUB_ID</string>
+        </config-file>
+        <config-file target="*-Info.plist" parent="HubSpotEnvironment">
+            <string>prod</string>
+        </config-file>
+        <config-file target="*-Info.plist" parent="HubSpotDefaultChatFlow">
+            <string>$HUBSPOT_DEFAULT_CHAT_FLOW</string>
+        </config-file>
+
+        <!-- Hook to add Swift Package Manager dependency -->
+        <hook type="after_plugin_install" src="hooks/ios/add_spm_dependency.js" />
+        <hook type="after_prepare" src="hooks/ios/add_spm_dependency.js" />
+    </platform>
+
+    <!-- Android -->
+    <platform name="android">
+        <config-file target="res/xml/config.xml" parent="/*">
+            <feature name="HubspotChat">
+                <param name="android-package" value="com.woub.plugins.hubspot.HubspotChatPlugin" />
+            </feature>
+        </config-file>
+
+        <source-file src="src/android/HubspotChatPlugin.java" target-dir="src/com/woub/plugins/hubspot" />
+
+        <!-- hubspot-info.json configuration -->
+        <hook type="after_plugin_install" src="hooks/android/create_config.js" />
+        <hook type="after_prepare" src="hooks/android/create_config.js" />
+
+        <!-- HubSpot SDK dependency -->
+        <framework src="com.hubspot.mobilechatsdk:mobile-chat-sdk-android:1.0.+" />
+    </platform>
+
+</plugin>

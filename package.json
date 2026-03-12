@@ -1,0 +1,24 @@
+{
+  "name": "cordova-plugin-hubspot-chat",
+  "version": "1.0.0",
+  "description": "Cordova plugin for HubSpot Mobile Chat SDK (iOS & Android)",
+  "cordova": {
+    "id": "cordova-plugin-hubspot-chat",
+    "platforms": ["ios", "android"]
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/woub-chat/cordova-plugin-hubspot-chat.git"
+  },
+  "keywords": [
+    "ecosystem:cordova",
+    "cordova-ios",
+    "cordova-android",
+    "hubspot",
+    "chat",
+    "support",
+    "live-chat"
+  ],
+  "author": "Woub",
+  "license": "MIT"
+}
