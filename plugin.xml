@@ -41,6 +41,13 @@
             </feature>
         </config-file>
 
+        <config-file target="AndroidManifest.xml" parent="/manifest/application">
+            <activity
+                android:name="com.hubspot.mobilesdk.HubspotWebActivity"
+                android:theme="@style/Theme.AppCompat.Light.NoActionBar"
+                android:exported="false" />
+        </config-file>
+
         <source-file src="src/android/HubspotChatPlugin.java" target-dir="src/com/woub/plugins/hubspot" />
 
         <!-- hubspot-info.json configuration -->
