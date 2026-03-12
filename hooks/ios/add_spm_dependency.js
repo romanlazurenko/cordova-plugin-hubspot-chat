@@ -17,7 +17,7 @@ module.exports = function (context) {
   // Get variables
   const variables = getPluginVariables(context, projectRoot);
   
-  // Create HubSpot-Info.plist
+  // Create Hubspot-Info.plist
   createHubSpotInfoPlist(platformPath, projectName, variables);
   
   // Add SPM dependency and plist to project
@@ -61,6 +61,25 @@ function getPluginVariables(context, projectRoot) {
         }
       } catch (e) {
         console.log("[HubspotChat] Could not parse fetch.json");
+      }
+    }
+  }
+
+  // Try package.json cordova section
+  if (!portalId || !hublet) {
+    const packageJsonPath = path.join(projectRoot, "package.json");
+    if (fs.existsSync(packageJsonPath)) {
+      try {
+        const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
+        const pluginVars = packageJson.cordova?.plugins?.["cordova-plugin-hubspot-chat"];
+        if (pluginVars) {
+          if (pluginVars.HUBSPOT_PORTAL_ID && !portalId) portalId = pluginVars.HUBSPOT_PORTAL_ID;
+          if (pluginVars.HUBSPOT_HUBLET && !hublet) hublet = pluginVars.HUBSPOT_HUBLET;
+          if (pluginVars.HUBSPOT_HUB_ID && !hublet) hublet = pluginVars.HUBSPOT_HUB_ID;
+          if (pluginVars.HUBSPOT_DEFAULT_CHAT_FLOW) defaultChatFlow = pluginVars.HUBSPOT_DEFAULT_CHAT_FLOW;
+        }
+      } catch (e) {
+        console.log("[HubspotChat] Could not parse package.json");
       }
     }
   }
@@ -131,11 +150,11 @@ function addToXcodeProject(platformPath, projectName, variables) {
   let pbxproj = fs.readFileSync(pbxprojPath, "utf8");
   let modified = false;
 
-  // Generate UUIDs
-  const packageRefUUID = generateUUID();
-  const packageProductUUID = generateUUID();
-  const plistFileRefUUID = generateUUID();
-  const plistBuildFileUUID = generateUUID();
+  // Generate consistent UUIDs based on a seed so they're the same across runs
+  const packageRefUUID = "HUBSPOT_SPM_PKG_REF_001";
+  const packageProductUUID = "HUBSPOT_SPM_PROD_DEP01";
+  const plistFileRefUUID = "HUBSPOT_PLIST_FILEREF1";
+  const plistBuildFileUUID = "HUBSPOT_PLIST_BUILD01";
 
   // Add Hubspot-Info.plist to PBXFileReference section
   if (!pbxproj.includes("Hubspot-Info.plist")) {
@@ -155,16 +174,10 @@ function addToXcodeProject(platformPath, projectName, variables) {
     );
 
     // Add to main group (find the group that contains other files like Info.plist)
-    const mainGroupMatch = pbxproj.match(
-      /([A-F0-9]{24})\s*\/\*\s*\w+\s*\*\/\s*=\s*\{[^}]*isa\s*=\s*PBXGroup[^}]*children\s*=\s*\([^)]*Info\.plist[^)]*\)/
+    pbxproj = pbxproj.replace(
+      /(children\s*=\s*\([^)]*)(Info\.plist[^,]*,)/,
+      `$1$2\n\t\t\t\t${plistFileRefUUID} /* Hubspot-Info.plist */,`
     );
-    
-    if (mainGroupMatch) {
-      pbxproj = pbxproj.replace(
-        /(children\s*=\s*\([^)]*)(Info\.plist[^,]*,)/,
-        `$1$2\n\t\t\t\t${plistFileRefUUID} /* Hubspot-Info.plist */,`
-      );
-    }
 
     // Add to Resources build phase
     pbxproj = pbxproj.replace(
@@ -177,10 +190,13 @@ function addToXcodeProject(platformPath, projectName, variables) {
   }
 
   // Add Swift Package Manager dependency
-  if (!pbxproj.includes("mobile-chat-sdk-ios")) {
-    // Add XCRemoteSwiftPackageReference section
-    if (!pbxproj.includes("XCRemoteSwiftPackageReference section")) {
-      const remotePackageSection = `/* Begin XCRemoteSwiftPackageReference section */
+  const originalPbxproj = pbxproj;
+  
+  console.log("[HubspotChat] Adding HubSpot SDK Swift Package Manager dependency...");
+
+  // Add XCRemoteSwiftPackageReference section if not exists
+  if (!pbxproj.includes("/* Begin XCRemoteSwiftPackageReference section */")) {
+    const remotePackageSection = `/* Begin XCRemoteSwiftPackageReference section */
 \t\t${packageRefUUID} /* XCRemoteSwiftPackageReference "mobile-chat-sdk-ios" */ = {
 \t\t\tisa = XCRemoteSwiftPackageReference;
 \t\t\trepositoryURL = "https://github.com/HubSpot/mobile-chat-sdk-ios";
@@ -192,12 +208,13 @@ function addToXcodeProject(platformPath, projectName, variables) {
 /* End XCRemoteSwiftPackageReference section */
 
 `;
-      pbxproj = pbxproj.replace(/([\s\S]*)(rootObject\s*=)/, "$1" + remotePackageSection + "$2");
-    }
+    pbxproj = pbxproj.replace(/([\s\S]*)(\/\* Begin XCConfigurationList section \*\/)/, "$1" + remotePackageSection + "$2");
+    console.log("[HubspotChat] Added XCRemoteSwiftPackageReference section");
+  }
 
-    // Add XCSwiftPackageProductDependency section
-    if (!pbxproj.includes("XCSwiftPackageProductDependency section")) {
-      const productDepSection = `/* Begin XCSwiftPackageProductDependency section */
+  // Add XCSwiftPackageProductDependency section if not exists
+  if (!pbxproj.includes("/* Begin XCSwiftPackageProductDependency section */")) {
+    const productDepSection = `/* Begin XCSwiftPackageProductDependency section */
 \t\t${packageProductUUID} /* HubspotMobileSDK */ = {
 \t\t\tisa = XCSwiftPackageProductDependency;
 \t\t\tpackage = ${packageRefUUID} /* XCRemoteSwiftPackageReference "mobile-chat-sdk-ios" */;
@@ -206,46 +223,46 @@ function addToXcodeProject(platformPath, projectName, variables) {
 /* End XCSwiftPackageProductDependency section */
 
 `;
-      pbxproj = pbxproj.replace(/([\s\S]*)(rootObject\s*=)/, "$1" + productDepSection + "$2");
-    }
-
-    // Add packageReferences to project object
-    if (!pbxproj.includes("packageReferences")) {
-      pbxproj = pbxproj.replace(
-        /(developmentRegion\s*=\s*\w+;)/,
-        `$1\n\t\t\tpackageReferences = (\n\t\t\t\t${packageRefUUID} /* XCRemoteSwiftPackageReference "mobile-chat-sdk-ios" */,\n\t\t\t);`
-      );
-    }
-
-    // Add packageProductDependencies to main target
-    if (!pbxproj.includes("packageProductDependencies")) {
-      // Find the native target with application product type
-      const targetRegex = /([A-F0-9]{24})\s*\/\*[^*]*\*\/\s*=\s*\{[^}]*isa\s*=\s*PBXNativeTarget;[^}]*productType\s*=\s*"com\.apple\.product-type\.application";[^}]*\}/g;
-      let match;
-      
-      while ((match = targetRegex.exec(pbxproj)) !== null) {
-        const targetUUID = match[1];
-        const targetBlock = match[0];
-        
-        // Check if this target already has packageProductDependencies
-        if (!targetBlock.includes("packageProductDependencies")) {
-          // Add after buildPhases
-          pbxproj = pbxproj.replace(
-            new RegExp(`(${targetUUID}[\\s\\S]*?buildPhases\\s*=\\s*\\([^)]+\\);)`, "m"),
-            `$1\n\t\t\tpackageProductDependencies = (\n\t\t\t\t${packageProductUUID} /* HubspotMobileSDK */,\n\t\t\t);`
-          );
-          break;
-        }
-      }
-    }
-
-    modified = true;
-    console.log("[HubspotChat] Added HubSpot SDK Swift Package to Xcode project");
+    pbxproj = pbxproj.replace(/([\s\S]*)(\/\* Begin XCConfigurationList section \*\/)/, "$1" + productDepSection + "$2");
+    console.log("[HubspotChat] Added XCSwiftPackageProductDependency section");
   }
 
-  if (modified) {
+  // Add to packageReferences - handle empty array
+  const packageRefEntry = `${packageRefUUID} /* XCRemoteSwiftPackageReference "mobile-chat-sdk-ios" */`;
+  // Check if packageReferences array contains our entry (not just anywhere in file)
+  const hasPackageRef = /packageReferences\s*=\s*\([^)]*HUBSPOT_SPM_PKG_REF_001[^)]*\)/.test(pbxproj);
+  if (!hasPackageRef) {
+    const beforeReplace = pbxproj;
+    pbxproj = pbxproj.replace(
+      /(packageReferences\s*=\s*\()(\n\s*\);)/g,
+      `$1\n\t\t\t\t${packageRefEntry},\n\t\t\t);`
+    );
+    if (pbxproj !== beforeReplace) {
+      console.log("[HubspotChat] Added packageReferences entry");
+    }
+  }
+
+  // Add to packageProductDependencies - handle empty array
+  const packageProdEntry = `${packageProductUUID} /* HubspotMobileSDK */`;
+  // Check if packageProductDependencies array contains our entry
+  const hasPackageProd = /packageProductDependencies\s*=\s*\([^)]*HUBSPOT_SPM_PROD_DEP01[^)]*\)/.test(pbxproj);
+  if (!hasPackageProd) {
+    const beforeReplace = pbxproj;
+    pbxproj = pbxproj.replace(
+      /(packageProductDependencies\s*=\s*\()(\n\s*\);)/g,
+      `$1\n\t\t\t\t${packageProdEntry},\n\t\t\t);`
+    );
+    if (pbxproj !== beforeReplace) {
+      console.log("[HubspotChat] Added packageProductDependencies entry");
+    }
+  }
+
+  // Write if changed
+  if (pbxproj !== originalPbxproj) {
     fs.writeFileSync(pbxprojPath, pbxproj);
     console.log("[HubspotChat] Xcode project updated successfully");
+  } else {
+    console.log("[HubspotChat] No changes needed to Xcode project");
   }
 }
 
@@ -259,13 +276,4 @@ function getProjectName(projectRoot) {
     }
   }
   return "App";
-}
-
-function generateUUID() {
-  const chars = "0123456789ABCDEF";
-  let uuid = "";
-  for (let i = 0; i < 24; i++) {
-    uuid += chars[Math.floor(Math.random() * 16)];
-  }
-  return uuid;
 }
