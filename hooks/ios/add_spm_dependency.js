@@ -227,31 +227,45 @@ function addToXcodeProject(platformPath, projectName, variables) {
     console.log("[HubspotChat] Added XCSwiftPackageProductDependency section");
   }
 
-  // Add to packageReferences - handle empty array
+  // Add to packageReferences in PBXProject section
   const packageRefEntry = `${packageRefUUID} /* XCRemoteSwiftPackageReference "mobile-chat-sdk-ios" */`;
-  // Check if packageReferences array contains our entry (not just anywhere in file)
   const hasPackageRef = /packageReferences\s*=\s*\([^)]*HUBSPOT_SPM_PKG_REF_001[^)]*\)/.test(pbxproj);
   if (!hasPackageRef) {
-    const beforeReplace = pbxproj;
+    let beforeReplace = pbxproj;
+    // Try to add to existing empty array
     pbxproj = pbxproj.replace(
       /(packageReferences\s*=\s*\()(\n\s*\);)/g,
       `$1\n\t\t\t\t${packageRefEntry},\n\t\t\t);`
     );
+    if (pbxproj === beforeReplace) {
+      // Array doesn't exist, add it after mainGroup in PBXProject section
+      pbxproj = pbxproj.replace(
+        /(mainGroup\s*=\s*[A-F0-9]+[^;]*;)/,
+        `$1\n\t\t\tpackageReferences = (\n\t\t\t\t${packageRefEntry},\n\t\t\t);`
+      );
+    }
     if (pbxproj !== beforeReplace) {
       console.log("[HubspotChat] Added packageReferences entry");
     }
   }
 
-  // Add to packageProductDependencies - handle empty array
+  // Add to packageProductDependencies in PBXNativeTarget section
   const packageProdEntry = `${packageProductUUID} /* HubspotMobileSDK */`;
-  // Check if packageProductDependencies array contains our entry
   const hasPackageProd = /packageProductDependencies\s*=\s*\([^)]*HUBSPOT_SPM_PROD_DEP01[^)]*\)/.test(pbxproj);
   if (!hasPackageProd) {
-    const beforeReplace = pbxproj;
+    let beforeReplace = pbxproj;
+    // Try to add to existing empty array
     pbxproj = pbxproj.replace(
       /(packageProductDependencies\s*=\s*\()(\n\s*\);)/g,
       `$1\n\t\t\t\t${packageProdEntry},\n\t\t\t);`
     );
+    if (pbxproj === beforeReplace) {
+      // Array doesn't exist, add it after buildPhases in PBXNativeTarget for application
+      pbxproj = pbxproj.replace(
+        /(isa\s*=\s*PBXNativeTarget;[\s\S]*?buildPhases\s*=\s*\([^)]+\);)/,
+        `$1\n\t\t\tpackageProductDependencies = (\n\t\t\t\t${packageProdEntry},\n\t\t\t);`
+      );
+    }
     if (pbxproj !== beforeReplace) {
       console.log("[HubspotChat] Added packageProductDependencies entry");
     }
